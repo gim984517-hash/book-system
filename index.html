@@ -3,186 +3,1085 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>책 재생산 시스템</title>
+    <title>단타의 신 - 주식 시뮬레이터</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Canvas Confetti Library for Graduation Celebration -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
+        @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
         body {
-            font-family: 'Malgun Gothic', sans-serif;
-            background-color: #f5f5f7;
-            margin: 0;
-            padding: 20px;
-            display: flex;
-            justify-content: center;
+            font-family: 'Pretendard', sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
         }
-        .container {
-            max-width: 500px;
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #111827;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #374151;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #4b5563;
+        }
+        /* Animations */
+        @keyframes floatUp {
+            0% { transform: translateY(100vh) scale(0.8); opacity: 0; }
+            50% { opacity: 0.8; }
+            100% { transform: translateY(-10vh) scale(1.2); opacity: 0; }
+        }
+        .floating-arrow {
+            position: absolute;
+            animation: floatUp 6s linear infinite;
+            pointer-events: none;
+        }
+        @keyframes pulseGlowRed {
+            0%, 100% { box-shadow: 0 0 15px rgba(239, 68, 68, 0.4); }
+            50% { box-shadow: 0 0 30px rgba(239, 68, 68, 0.8); }
+        }
+        .pulse-red {
+            animation: pulseGlowRed 2s infinite;
+        }
+        /* Gray transition curtain sliders */
+        .curtain-layer {
+            position: absolute;
+            top: 0;
             width: 100%;
-            background: white;
-            padding: 20px;
-            border-radius: 12px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            height: 33.33vh;
+            background-color: #1f2937;
+            z-index: 100;
+            transition: transform 0.6s cubic-bezier(0.77, 0, 0.175, 1);
         }
-        h1 {
-            text-align: center;
-            color: #333;
-            font-size: 24px;
-            margin-bottom: 25px;
-            border-bottom: 2px solid #007aff;
-            padding-bottom: 10px;
+        .curtain-layer:nth-child(1) { top: 0; background-color: #111827; }
+        .curtain-layer:nth-child(2) { top: 33.33vh; background-color: #1f2937; transition-delay: 0.1s; }
+        .curtain-layer:nth-child(3) { top: 66.66vh; background-color: #374151; transition-delay: 0.2s; }
+        
+        .curtain-closed .curtain-layer {
+            transform: translateX(0%);
         }
-        .book-list {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-        .book-item {
-            padding: 15px;
-            background: #f8f9fa;
-            border: 1px solid #e9ecef;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .book-item:hover {
-            background: #e8f4ff;
-            border-color: #007aff;
-            transform: translateY(-2px);
-        }
-        .book-title {
-            font-weight: bold;
-            color: #222;
-        }
-        .book-page {
-            font-size: 13px;
-            color: #666;
-            background: #e9ecef;
-            padding: 3px 8px;
-            border-radius: 12px;
-        }
-        /* 로딩 화면 스타일 */
-        .loading-screen {
-            display: none;
-            text-align: center;
-            padding: 40px 20px;
-        }
-        .spinner {
-            width: 50px;
-            height: 50px;
-            border: 5px solid #f3f3f3;
-            border-top: 5px solid #007aff;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 20px;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        .loading-text {
-            font-size: 18px;
-            font-weight: bold;
-            color: #333;
-            margin-bottom: 10px;
-        }
-        .time-text {
-            color: #ff3b30;
-            font-weight: bold;
-            font-size: 16px;
-        }
-        .back-btn {
-            margin-top: 25px;
-            padding: 10px 20px;
-            background-color: #6c757d;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
+        .curtain-open .curtain-layer {
+            transform: translateX(-100%);
         }
     </style>
 </head>
-<body>
+<body class="bg-gray-950 text-gray-100 min-h-screen flex flex-col justify-between overflow-x-hidden select-none">
 
-<div class="container">
-    <!-- 메인 화면 -->
-    <div id="main-view">
-        <h1>책 재생산 목록</h1>
-        <div class="book-list">
-            <!-- 분량(페이지 수)에 따라 예상 시간이 다르게 계산됩니다 -->
-            <div class="book-item" onclick="startReproduction('데미안', 240)">
-                <span class="book-title">데미안</span>
-                <span class="book-page">240 p</span>
+    <!-- Web Audio Sound Engine -->
+    <script>
+        // Web Audio Synthesizer for SFX
+        class SoundEngine {
+            constructor() {
+                this.ctx = null;
+            }
+            init() {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+            }
+            playTone(freq, type = 'sine', duration = 0.1, gainVal = 0.1) {
+                if (!this.ctx) return;
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = type;
+                    osc.frequency.value = freq;
+                    gain.gain.setValueAtTime(gainVal, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + duration);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + duration);
+                } catch(e) {}
+            }
+            click() { this.init(); this.playTone(800, 'sine', 0.05, 0.05); }
+            buy() { this.init(); this.playTone(523.25, 'triangle', 0.15, 0.15); setTimeout(() => this.playTone(659.25, 'triangle', 0.2, 0.15), 80); }
+            sell() { this.init(); this.playTone(659.25, 'triangle', 0.15, 0.15); setTimeout(() => this.playTone(523.25, 'triangle', 0.2, 0.15), 80); }
+            news() { this.init(); this.playTone(440, 'square', 0.1, 0.1); setTimeout(() => this.playTone(880, 'square', 0.25, 0.15), 100); }
+            gameOver() { 
+                this.init(); 
+                this.playTone(300, 'sawtooth', 0.3, 0.2); 
+                setTimeout(() => this.playTone(200, 'sawtooth', 0.4, 0.2), 250);
+                setTimeout(() => this.playTone(100, 'sawtooth', 0.8, 0.3), 600);
+            }
+            fanfare() {
+                this.init();
+                const notes = [261.63, 329.63, 392.00, 523.25];
+                notes.forEach((freq, idx) => {
+                    setTimeout(() => this.playTone(freq, 'triangle', 0.3, 0.2), idx * 150);
+                });
+            }
+        }
+        const sfx = new SoundEngine();
+    </script>
+
+    <!-- Transition Overlay Curtains -->
+    <div id="transitionOverlay" class="fixed inset-0 pointer-events-none z-50 curtain-open">
+        <div class="curtain-layer"></div>
+        <div class="curtain-layer"></div>
+        <div class="curtain-layer"></div>
+    </div>
+
+    <!-- START SCREEN -->
+    <div id="startScreen" class="relative min-h-screen flex flex-col justify-between items-center p-6 overflow-hidden bg-gradient-to-b from-gray-950 via-gray-900 to-gray-950">
+        <!-- Animated Background Canvas -->
+        <canvas id="bgChartCanvas" class="absolute inset-0 w-full h-full opacity-25 pointer-events-none"></canvas>
+        
+        <!-- Floating Red/Blue Market Arrows -->
+        <div id="floatingArrowsContainer" class="absolute inset-0 pointer-events-none overflow-hidden"></div>
+
+        <!-- Title Section -->
+        <div class="relative z-10 text-center mt-12 md:mt-20">
+            <div class="inline-block px-4 py-1.5 rounded-full bg-red-950/60 border border-red-500/30 text-red-400 font-semibold text-xs md:text-sm mb-4 tracking-wider uppercase animate-pulse">
+                <i class="fa-solid me-1.5 fa-chart-line"></i> 초고위험 주식 단타 시뮬레이터
             </div>
-            <div class="book-item" onclick="startReproduction('어린 왕자', 120)">
-                <span class="book-title">어린 왕자</span>
-                <span class="book-page">120 p</span>
+            <h1 class="text-5xl md:text-7xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-red-500 via-yellow-400 to-emerald-400 drop-shadow-lg mb-3">
+                단타의 신
+            </h1>
+            <p class="text-gray-400 text-sm md:text-lg max-w-md mx-auto">
+                100만원으로 시작하여 1억원의 졸업 자산에 도전하세요.<br>
+                <span class="text-red-400 font-semibold">-1억원 이하</span> 낙향시 무자비하게 청산됩니다!
+            </p>
+        </div>
+
+        <!-- Main Menu Buttons -->
+        <div class="relative z-10 w-full max-w-sm flex flex-col gap-4 mb-12">
+            <button id="btnStartGame" onclick="sfx.click(); startGameSequence();" class="w-full py-4 px-6 bg-gradient-to-r from-red-600 to-rose-500 hover:from-red-500 hover:to-rose-400 text-white font-bold text-xl rounded-2xl shadow-lg shadow-red-900/40 hover:shadow-red-600/50 transform hover:-translate-y-0.5 transition-all duration-200 flex items-center justify-center gap-3">
+                <i class="fa-solid fa-play"></i> 게임 시작
+            </button>
+            <button onclick="sfx.click(); openModal('recordsModal');" class="w-full py-3.5 px-6 bg-gray-800/90 hover:bg-gray-700/90 border border-gray-700 text-gray-200 font-bold text-lg rounded-2xl shadow-md hover:border-gray-500 transition-all duration-200 flex items-center justify-center gap-3">
+                <i class="fa-solid fa-trophy text-amber-400"></i> 기록 보기
+            </button>
+            <button onclick="sfx.click(); openModal('howToModal');" class="w-full py-3.5 px-6 bg-gray-800/90 hover:bg-gray-700/90 border border-gray-700 text-gray-200 font-bold text-lg rounded-2xl shadow-md hover:border-gray-500 transition-all duration-200 flex items-center justify-center gap-3">
+                <i class="fa-solid fa-book-open text-blue-400"></i> 게임 플레이 방법
+            </button>
+        </div>
+
+        <!-- Footer -->
+        <div class="relative z-10 text-xs text-gray-600 mb-4">
+            © 2026 단타의 신 (God of Day Trading). All Rights Reserved.
+        </div>
+    </div>
+
+    <!-- COUNTDOWN OVERLAY SCREEN -->
+    <div id="countdownScreen" class="hidden fixed inset-0 z-40 bg-gray-950 flex flex-col items-center justify-center p-6 text-center">
+        <div class="max-w-xl mx-auto space-y-8">
+            <div id="quoteContainer" class="bg-gray-900/80 border border-gray-800 p-6 rounded-2xl shadow-xl transition-all duration-500">
+                <i class="fa-solid fa-quote-left text-3xl text-gray-600 mb-3 block"></i>
+                <p id="quoteText" class="text-lg md:text-xl font-medium text-amber-200 mb-2">"위험은 자신이 무엇을 하는지 모르는 데서 온다."</p>
+                <p id="quoteAuthor" class="text-xs md:text-sm text-gray-400 font-semibold text-right">- 워런 버핏 (Warren Buffett)</p>
             </div>
-            <div class="book-item" onclick="startReproduction('1984', 420)">
-                <span class="book-title">1984</span>
-                <span class="book-page">420 p</span>
-            </div>
-            <div class="book-item" onclick="startReproduction('위대한 개츠비', 280)">
-                <span class="book-title">위대한 개츠비</span>
-                <span class="book-page">280 p</span>
-            </div>
-            <div class="book-item" onclick="startReproduction('노인과 바다', 150)">
-                <span class="book-title">노인과 바다</span>
-                <span class="book-page">150 p</span>
-            </div>
-            <div class="book-item" onclick="startReproduction('코스모스', 700)">
-                <span class="book-title">코스모스</span>
-                <span class="book-page">700 p</span>
+            <div id="countdownNumber" class="text-8xl md:text-9xl font-black text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-amber-400 animate-bounce">
+                3
             </div>
         </div>
     </div>
 
-    <!-- 재생산 진행 화면 -->
-    <div id="loading-view" class="loading-screen">
-        <div class="spinner"></div>
-        <div class="loading-text"><span id="selected-book"></span><br>책 재생산 중...</div>
-        <div class="time-text">예상 소요 시간: <span id="estimated-time"></span></div>
-        <button class="back-btn" onclick="resetView()">처음으로 돌아가기</button>
+    <!-- MAIN GAME SCREEN -->
+    <div id="gameScreen" class="hidden min-h-screen flex flex-col bg-gray-950">
+        <!-- TOP NAVIGATION BAR / TICKER -->
+        <header class="bg-gray-900 border-b border-gray-800 px-4 py-3 sticky top-0 z-30 shadow-md">
+            <!-- Breaking News Ticker Banner -->
+            <div id="newsBanner" class="bg-gradient-to-r from-red-950 via-red-900 to-red-950 border border-red-700/50 rounded-xl px-4 py-2 mb-3 flex items-center gap-3 shadow-inner">
+                <span class="bg-red-600 text-white font-extrabold text-xs px-2.5 py-1 rounded-md animate-pulse uppercase tracking-wider flex items-center gap-1">
+                    <i class="fa-solid fa-bolt"></i> 속보
+                </span>
+                <div class="flex-1 overflow-hidden whitespace-nowrap">
+                    <span id="newsText" class="inline-block text-sm font-semibold text-red-200">
+                        [시작] 증권 시장이 개장되었습니다! 5초마다 주가가 고동칩니다.
+                    </span>
+                </div>
+            </div>
+
+            <!-- Portfolio Summary Stats Header -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4 text-xs md:text-sm">
+                <div class="bg-gray-800/80 p-2.5 rounded-xl border border-gray-700/60">
+                    <span class="text-gray-400 block text-[11px]">총 순자산 (Net Asset)</span>
+                    <span id="statNetAssets" class="text-base md:text-lg font-bold text-white">1,000,000 원</span>
+                </div>
+                <div class="bg-gray-800/80 p-2.5 rounded-xl border border-gray-700/60">
+                    <span class="text-gray-400 block text-[11px]">보유 현금 (Cash)</span>
+                    <span id="statCash" class="text-base md:text-lg font-bold text-emerald-400">1,000,000 원</span>
+                </div>
+                <div class="bg-gray-800/80 p-2.5 rounded-xl border border-gray-700/60">
+                    <span class="text-gray-400 block text-[11px]">총 손익 (P&L)</span>
+                    <span id="statProfit" class="text-base md:text-lg font-bold text-gray-300">0 원 (0.00%)</span>
+                </div>
+                <div class="flex items-center justify-end">
+                    <button onclick="sfx.click(); triggerGraduation();" class="w-full h-full py-2 px-4 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-black text-sm md:text-base rounded-xl shadow-lg pulse-red transition flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-graduation-cap"></i> 졸업하기
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- MAIN CONTENT LAYOUT -->
+        <main class="flex-1 p-3 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-4 max-w-7xl mx-auto w-full">
+            <!-- LEFT PANEL: Stock List (5 Stock Cards) -->
+            <div class="lg:col-span-5 flex flex-col gap-3">
+                <div class="flex items-center justify-between px-1">
+                    <h2 class="text-base font-bold text-gray-300 flex items-center gap-2">
+                        <i class="fa-solid fa-list-trend text-red-500"></i> 거래 종목 리스트
+                    </h2>
+                    <span class="text-xs text-gray-500">5초 주기 주가 변동</span>
+                </div>
+
+                <div id="stockListContainer" class="flex flex-col gap-2.5">
+                    <!-- Stock items injected via JS -->
+                </div>
+            </div>
+
+            <!-- RIGHT PANEL: Trading Console & Dynamic Chart -->
+            <div class="lg:col-span-7 flex flex-col gap-4">
+                <!-- Stock Header & Dynamic Price Detail -->
+                <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 md:p-5 flex flex-col justify-between">
+                    <div class="flex items-start justify-between mb-4">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <h2 id="activeStockName" class="text-2xl font-black text-white">삼성전자</h2>
+                                <span id="activeStockVolatility" class="text-xs px-2 py-0.5 rounded bg-gray-800 text-gray-400 border border-gray-700">변동성: 극소</span>
+                            </div>
+                            <p id="activeStockDesc" class="text-xs text-gray-400 mt-1">대한민국 대표 우량주 (낮은 변동성)</p>
+                        </div>
+                        <div class="text-right">
+                            <div id="activeStockPrice" class="text-2xl md:text-3xl font-black text-red-500">70,000 원</div>
+                            <div id="activeStockChange" class="text-xs md:text-sm font-semibold text-red-400">+0 원 (+0.00%)</div>
+                        </div>
+                    </div>
+
+                    <!-- Chart Container -->
+                    <div class="relative w-full h-48 md:h-64 bg-gray-950/60 rounded-xl p-2 border border-gray-800/80 mb-4">
+                        <canvas id="stockDetailChart"></canvas>
+                    </div>
+
+                    <!-- Position Summary Banner -->
+                    <div id="activePositionBanner" class="bg-gray-850 border border-gray-750 p-3 rounded-xl flex items-center justify-between text-xs md:text-sm mb-4">
+                        <div>
+                            <span class="text-gray-400 block">내 보유 포지션</span>
+                            <span id="posTypeQty" class="font-bold text-white">포지션 없음</span>
+                        </div>
+                        <div>
+                            <span class="text-gray-400 block">평단가 / 레버리지</span>
+                            <span id="posAvgLeverage" class="font-bold text-gray-300">-</span>
+                        </div>
+                        <div class="text-right">
+                            <span class="text-gray-400 block">평가 손익</span>
+                            <span id="posPnL" class="font-bold text-gray-400">0 원 (0.00%)</span>
+                        </div>
+                    </div>
+
+                    <!-- TRADING CONTROLS PANEL -->
+                    <div class="space-y-4">
+                        <!-- Leverage Toggle & Quantity Settings -->
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-400 mb-1">레버리지 설정</label>
+                                <div class="grid grid-cols-2 gap-1 bg-gray-950 p-1 rounded-xl border border-gray-800">
+                                    <button id="lev1xBtn" onclick="setLeverage(1)" class="py-1.5 text-xs font-bold rounded-lg bg-red-600 text-white transition">1x (기본)</button>
+                                    <button id="lev2xBtn" onclick="setLeverage(2)" class="py-1.5 text-xs font-bold rounded-lg text-gray-400 hover:text-white transition">2x (초고위험)</button>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-400 mb-1">투자 비중 (주문량)</label>
+                                <div class="grid grid-cols-4 gap-1">
+                                    <button onclick="setTradeRatio(0.25)" class="py-2 text-xs font-semibold bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg border border-gray-700">25%</button>
+                                    <button onclick="setTradeRatio(0.50)" class="py-2 text-xs font-semibold bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg border border-gray-700">50%</button>
+                                    <button onclick="setTradeRatio(0.75)" class="py-2 text-xs font-semibold bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg border border-gray-700">75%</button>
+                                    <button onclick="setTradeRatio(1.00)" class="py-2 text-xs font-bold bg-amber-600/30 hover:bg-amber-600/50 text-amber-300 rounded-lg border border-amber-500/40">100%</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Buy / Short / Sell Buttons -->
+                        <div class="grid grid-cols-3 gap-2 md:gap-3">
+                            <button onclick="executeTrade('BUY')" class="py-3.5 px-3 bg-red-600 hover:bg-red-500 active:scale-95 text-white font-bold text-sm md:text-base rounded-xl shadow-md transition flex flex-col items-center justify-center">
+                                <span><i class="fa-solid fa-arrow-trend-up me-1"></i> 매수 (Long)</span>
+                                <span class="text-[10px] font-normal opacity-80">주가 상승에 투자</span>
+                            </button>
+                            <button onclick="executeTrade('SHORT')" class="py-3.5 px-3 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-bold text-sm md:text-base rounded-xl shadow-md transition flex flex-col items-center justify-center">
+                                <span><i class="fa-solid fa-arrow-trend-down me-1"></i> 공매도 (Short)</span>
+                                <span class="text-[10px] font-normal opacity-80">주가 하락에 투자</span>
+                            </button>
+                            <button onclick="executeTrade('CLOSE')" class="py-3.5 px-3 bg-gray-700 hover:bg-gray-600 active:scale-95 text-white font-bold text-sm md:text-base rounded-xl shadow-md transition flex flex-col items-center justify-center">
+                                <span><i class="fa-solid fa-handshake-simple me-1"></i> 청산 / 매도</span>
+                                <span class="text-[10px] font-normal opacity-80">포지션 종료 및 정리</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
     </div>
-</div>
 
-<script>
-    function startReproduction(bookName, pages) {
-        // 1. 확인/취소 팝업창 띄우기
-        const confirmCheck = confirm(`[${bookName}] 재생산을 시작하시겠습니까?`);
-        
-        if (confirmCheck) {
-            // 2. 확인을 누른 경우: 분량에 따른 시간 계산 (4시간 ~ 6시간 사이)
-            // 최소 120쪽 이하 4시간, 최대 600쪽 이상 6시간, 그 사이는 비례 계산
-            let hours = 4;
-            if (pages >= 600) {
-                hours = 6;
-            } else if (pages > 120) {
-                // 120p~600p 사이를 4시간~6시간으로 변환하는 수식
-                hours = 4 + ((pages - 120) / (600 - 120)) * 2;
+    <!-- BANKRUPT GAME OVER SCREEN -->
+    <div id="gameOverModal" class="hidden fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="bg-gray-900 border-2 border-red-600 rounded-3xl p-6 md:p-8 max-w-md w-full text-center shadow-2xl relative overflow-hidden">
+            <div class="text-6xl md:text-7xl mb-2 animate-bounce">🤡 💸 📉 🤣</div>
+            <h2 class="text-5xl md:text-6xl font-black text-red-600 tracking-wider mb-2 drop-shadow-[0_0_20px_rgba(220,38,38,0.8)]">
+                청 산
+            </h2>
+            <p class="text-gray-300 font-bold text-lg mb-6">"다시 태어나시겠습니까?"</p>
+
+            <div class="bg-gray-950 p-4 rounded-2xl border border-gray-800 mb-6 text-left space-y-2">
+                <div class="flex justify-between text-xs text-gray-400">
+                    <span>최종 손익:</span>
+                    <span id="goFinalAssets" class="font-bold text-red-500">-100,000,000 원</span>
+                </div>
+                <div class="flex justify-between text-xs text-gray-400">
+                    <span>청산 원인:</span>
+                    <span class="font-semibold text-gray-300">순자산 -1억원 도달 (파산)</span>
+                </div>
+            </div>
+
+            <div class="flex justify-center gap-3 text-3xl mb-6">
+                <span>🤡</span><span>💸</span><span>📉</span><span>💩</span><span>🗑️</span>
+            </div>
+
+            <button onclick="sfx.click(); restartGame();" class="w-full py-4 px-6 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-black text-xl rounded-2xl shadow-xl shadow-red-950 transition active:scale-95 flex items-center justify-center gap-2">
+                <i class="fa-solid fa-rotate-right"></i> 다시 태어나기 (재시작)
+            </button>
+        </div>
+    </div>
+
+    <!-- GRADUATION / RECORD SUMMARY SCREEN -->
+    <div id="graduationModal" class="hidden fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="bg-gray-900 border border-gray-700 rounded-3xl p-6 md:p-8 max-w-md w-full text-center shadow-2xl relative">
+            <div id="gradTrophyIcon" class="text-6xl mb-3">🎓</div>
+            <h2 id="gradTitle" class="text-3xl font-black text-white mb-2">투자 졸업 리포트</h2>
+            <p class="text-xs text-gray-400 mb-6">당신의 단타 인생 거래 최종 성과입니다.</p>
+
+            <!-- Prominent Asset Display -->
+            <div id="gradAssetBox" class="bg-gray-950 p-6 rounded-2xl border border-gray-800 mb-6 flex flex-col items-center justify-center">
+                <span class="text-xs text-gray-400 mb-1">최종 보유 자산</span>
+                <span id="gradFinalAssetValue" class="text-3xl md:text-4xl font-black text-red-500">
+                    +150,000,000 원
+                </span>
+            </div>
+
+            <p id="gradMessage" class="text-sm font-semibold text-amber-300 mb-6">
+                축하합니다! 1억원의 장벽을 돌파하고 전설의 투자자로 졸업하였습니다!
+            </p>
+
+            <button onclick="sfx.click(); returnToStartScreen();" class="w-full py-4 px-6 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-lg rounded-2xl shadow-lg transition active:scale-95">
+                시작 화면으로 돌아가기
+            </button>
+        </div>
+    </div>
+
+    <!-- RECORDS MODAL -->
+    <div id="recordsModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-gray-900 border border-gray-800 rounded-3xl p-6 max-w-sm w-full text-center shadow-2xl relative">
+            <button onclick="sfx.click(); closeModal('recordsModal');" class="absolute top-4 right-4 text-gray-400 hover:text-white text-xl">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <h3 class="text-2xl font-black text-amber-400 mb-6 flex items-center justify-center gap-2">
+                <i class="fa-solid fa-trophy"></i> 단타의 신 기록실
+            </h3>
+
+            <div class="space-y-4 mb-6">
+                <div class="bg-gray-950 p-4 rounded-2xl border border-gray-800 text-left">
+                    <span class="text-xs text-gray-400 block mb-1">🔥 역대 최고 수익 (Highest Profit)</span>
+                    <span id="recordHighest" class="text-xl font-black text-red-500">0 원</span>
+                </div>
+                <div class="bg-gray-950 p-4 rounded-2xl border border-gray-800 text-left">
+                    <span class="text-xs text-gray-400 block mb-1">💀 역대 최대 빚/최하 수익 (Lowest / Biggest Debt)</span>
+                    <span id="recordLowest" class="text-xl font-black text-blue-500">0 원</span>
+                </div>
+            </div>
+
+            <button onclick="sfx.click(); closeModal('recordsModal');" class="w-full py-3 bg-gray-800 hover:bg-gray-700 text-gray-200 font-bold rounded-xl text-sm transition">
+                닫기
+            </button>
+        </div>
+    </div>
+
+    <!-- HOW TO PLAY MODAL (5 PAGES CAROUSEL) -->
+    <div id="howToModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-gray-900 border border-gray-800 rounded-3xl p-6 max-w-md w-full shadow-2xl relative flex flex-col justify-between min-h-[420px]">
+            <button onclick="sfx.click(); closeModal('howToModal');" class="absolute top-4 right-4 text-gray-400 hover:text-white text-xl z-10">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+
+            <!-- Page Contents Container -->
+            <div id="howToPagesContainer" class="my-auto">
+                <!-- Page 1 -->
+                <div class="howToPage flex flex-col items-center text-center">
+                    <div class="w-16 h-16 rounded-2xl bg-red-950/80 border border-red-500/30 flex items-center justify-center text-3xl text-red-400 mb-4">
+                        🎯
+                    </div>
+                    <h4 class="text-xl font-bold text-white mb-2">1페이지: 목표 및 청산 규칙</h4>
+                    <p class="text-sm text-gray-300 leading-relaxed">
+                        초기 자금 <span class="text-emerald-400 font-bold">100만원</span>으로 시작합니다.<br>
+                        목표는 단타 매매로 자산을 증식하여 <span class="text-red-400 font-bold">1억원 이상</span> 졸업하는 것입니다.<br>
+                        단, 총 순자산이 <span class="text-blue-400 font-bold">-1억원 이하</span>가 되면 강제 청산(게임오버)됩니다!
+                    </p>
+                </div>
+                <!-- Page 2 -->
+                <div class="howToPage hidden flex flex-col items-center text-center">
+                    <div class="w-16 h-16 rounded-2xl bg-amber-950/80 border border-amber-500/30 flex items-center justify-center text-3xl text-amber-400 mb-4">
+                        📊
+                    </div>
+                    <h4 class="text-xl font-bold text-white mb-2">2페이지: 5개 종목 및 변동성</h4>
+                    <p class="text-sm text-gray-300 leading-relaxed">
+                        종목별 변동성 순서:<br>
+                        <span class="font-semibold text-gray-200">삼성전자 < 엔비디아 < SK하이닉스 < 테슬라 < 게임스탑</span><br><br>
+                        게임스탑은 극악의 떡상 및 떡락을 보여주는 위험 종목입니다.
+                    </p>
+                </div>
+                <!-- Page 3 -->
+                <div class="howToPage hidden flex flex-col items-center text-center">
+                    <div class="w-16 h-16 rounded-2xl bg-blue-950/80 border border-blue-500/30 flex items-center justify-center text-3xl text-blue-400 mb-4">
+                        ⚡
+                    </div>
+                    <h4 class="text-xl font-bold text-white mb-2">3페이지: 매수, 공매도 및 레버리지</h4>
+                    <p class="text-sm text-gray-300 leading-relaxed">
+                        상승이 예상되면 <span class="text-red-400 font-bold">매수(Long)</span>, 하락이 예상되면 <span class="text-blue-400 font-bold">공매도(Short)</span>를 진행하세요.<br>
+                        <span class="text-amber-400 font-bold">200% (2x) 레버리지</span> 선택 시 수익도 2배, 손실도 2배가 됩니다.
+                    </p>
+                </div>
+                <!-- Page 4 -->
+                <div class="howToPage hidden flex flex-col items-center text-center">
+                    <div class="w-16 h-16 rounded-2xl bg-purple-950/80 border border-purple-500/30 flex items-center justify-center text-3xl text-purple-400 mb-4">
+                        📰
+                    </div>
+                    <h4 class="text-xl font-bold text-white mb-2">4페이지: 20초마다 터지는 속보</h4>
+                    <p class="text-sm text-gray-300 leading-relaxed">
+                        20초마다 화면 상단에 개그성 돌발 뉴스 속보가 등장합니다!<br>
+                        뉴스는 해당 종목을 즉시 <span class="text-red-400 font-bold font-mono">+30% ~ +80%</span> 폭등시키거나 <span class="text-blue-400 font-bold font-mono">-30% ~ -70%</span> 대폭락시킵니다.
+                    </p>
+                </div>
+                <!-- Page 5 -->
+                <div class="howToPage hidden flex flex-col items-center text-center">
+                    <div class="w-16 h-16 rounded-2xl bg-emerald-950/80 border border-emerald-500/30 flex items-center justify-center text-3xl text-emerald-400 mb-4">
+                        🏆
+                    </div>
+                    <h4 class="text-xl font-bold text-white mb-2">5페이지: 졸업 및 기록 저장</h4>
+                    <p class="text-sm text-gray-300 leading-relaxed">
+                        원하는 때 언제든지 상단의 <span class="text-red-500 font-bold">졸업하기</span> 버튼을 눌러 게임을 마칠 수 있습니다.<br>
+                        보유한 주식과 현금이 합산되어 기록실에 최대 수익 및 최하 수익이 기록됩니다.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Modal Navigation Bottom -->
+            <div class="flex items-center justify-between pt-6 border-t border-gray-800">
+                <button id="howToPrevBtn" onclick="sfx.click(); changeHowToPage(-1);" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-xl text-xs font-bold transition">
+                    <i class="fa-solid fa-chevron-left"></i> 이전
+                </button>
+                <div id="howToIndicator" class="text-xs font-semibold text-gray-500">
+                    1 / 5
+                </div>
+                <button id="howToNextBtn" onclick="sfx.click(); changeHowToPage(1);" class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-bold transition">
+                    다음 <i class="fa-solid fa-chevron-right"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN GAME JAVASCRIPT LOGIC -->
+    <script>
+        // -------------------------------------------------------------
+        // GAME STATE & CONSTANTS
+        // -------------------------------------------------------------
+        const INITIAL_CASH = 1000000; // 100만원
+        const BANKRUPT_THRESHOLD = -100000000; // -1억원
+        const GRADUATION_GOAL = 100000000; // 1억원
+
+        let playerCash = INITIAL_CASH;
+        let selectedStockId = 'samsung';
+        let tradeRatio = 0.25; // Default 25%
+        let selectedLeverage = 1; // 1x or 2x
+
+        let gameTimer = null;
+        let newsTimer = null;
+        let newsCountdown = 20;
+
+        // Stock Definitions
+        const stocks = [
+            { id: 'samsung', name: '삼성전자', desc: '대한민국 대표 우량주', price: 70000, history: [], volatility: 0.02, volText: '극소', pos: { qty: 0, type: null, avgPrice: 0, leverage: 1 } },
+            { id: 'nvidia', name: '엔비디아', desc: 'AI 반도체 대장주', price: 150000, history: [], volatility: 0.04, volText: '소', pos: { qty: 0, type: null, avgPrice: 0, leverage: 1 } },
+            { id: 'hynix', name: 'SK하이닉스', desc: '고성능 HBM 대표주', price: 180000, history: [], volatility: 0.07, volText: '중', pos: { qty: 0, type: null, avgPrice: 0, leverage: 1 } },
+            { id: 'tesla', name: '테슬라', desc: '전기차 & 변동성의 상징', price: 250000, history: [], volatility: 0.12, volText: '고', pos: { qty: 0, type: null, avgPrice: 0, leverage: 1 } },
+            { id: 'gamestop', name: '게임스탑', desc: '밈 주식의 정점', price: 30000, history: [], volatility: 0.25, volText: '극악', pos: { qty: 0, type: null, avgPrice: 0, leverage: 1 } }
+        ];
+
+        // 20 Humorous News Items (4 items per stock)
+        const newsDatabase = [
+            // Samsung
+            { stockId: 'samsung', text: "(단독) 삼성전자, '이재용 회장 주머니에서 10나노 신기술 발견'... 주가 대폭등!", impact: 0.50 },
+            { stockId: 'samsung', text: "(속보) 삼성 폴더블폰, 너무 접다가 반으로 잘라져... 사후지원 논란에 대폭락!", impact: -0.40 },
+            { stockId: 'samsung', text: "(특종) 삼성, 냉장고에 AI 탑재했더니 스스로 야식 주문... 혁신평가 폭등!", impact: 0.35 },
+            { stockId: 'samsung', text: "(긴급) 반도체 공장 깨끗이 청소하려다 주요 생산라인 물청소... 주가 충격 하락!", impact: -0.45 },
+            // Nvidia
+            { stockId: 'nvidia', text: "(단독) 젠슨 황, '가죽자켓에 우주의 기운 담겼다' 발언 후 서버 주문 폭주!", impact: 0.60 },
+            { stockId: 'nvidia', text: "(속보) 차세대 그래픽카드 전력 소비량 '원자력 발전소 1기 수준' 밝혀져 폭락!", impact: -0.50 },
+            { stockId: 'nvidia', text: "(특종) 엔비디아 AI, 인류 대신 주식 매매 시작해 최고 실적 달성!", impact: 0.45 },
+            { stockId: 'nvidia', text: "(속보) 젠슨 황, 가죽자켓 세탁소에 맡겼다가 잃어버려... 경영 위기론에 하락!", impact: -0.35 },
+            // SK Hynix
+            { stockId: 'hynix', text: "(단독) SK하이닉스 HBM 메모리, 외계인 기술 고문 계약 체결 소식에 대폭등!", impact: 0.55 },
+            { stockId: 'hynix', text: "(긴급) 이천 공장 근처 구름 모양이 반도체 패키징 닮아 수급 폭발!", impact: 0.30 },
+            { stockId: 'hynix', text: "(속보) HBM 반도체 쌓아 올리다가 무너져... 재고 손실 우려에 폭락!", impact: -0.40 },
+            { stockId: 'hynix', text: "(특종) SK하이닉스 사내 식당 메뉴 '한우 A++' 변경 후 연구원 생산성 폭증!", impact: 0.40 },
+            // Tesla
+            { stockId: 'tesla', text: "(단독) 일론 머스크, '화성이 날 부르고 있어' 테슬라 사업 축소 및 도주 발표!", impact: -0.65 },
+            { stockId: 'tesla', text: "(속보) 사이버트럭, 도자기 재질 신모델 출시... 충돌시 깨진다는 이유로 폭락!", impact: -0.45 },
+            { stockId: 'tesla', text: "(특종) 일론 머스크, X(구 트위터)에 '테슬라 주가 너무 낮다' 트윗 후 대폭등!", impact: 0.70 },
+            { stockId: 'tesla', text: "(속보) 자율주행 FSD, 가던 길에 맛집 발견하고 스스로 주차 후 떡상!", impact: 0.50 },
+            // GameStop
+            { stockId: 'gamestop', text: "(전설) 레딧 개미 군단, '지구 내핵까지 홀딩' 선언하며 매수세 폭발!", impact: 0.85 },
+            { stockId: 'gamestop', text: "(속보) 게임스탑, 중고 게임 CD 팔아 퀀텀 컴퓨터 개발 선언... 초폭등!", impact: 0.75 },
+            { stockId: 'gamestop', text: "(긴급) 공매도 기관의 무자비한 덤핑 공격 개시... 주가 마이너스 직전 대폭락!", impact: -0.70 },
+            { stockId: 'gamestop', text: "(속보) CEO, 실수로 매도 버튼 눌러 시장 교란... 개미들 분노의 폭락!", impact: -0.55 }
+        ];
+
+        // Quotes for Countdown
+        const quotes = [
+            { text: "위험은 자신이 무엇을 하는지 모르는 데서 온다.", author: "워런 버핏 (Warren Buffett)" },
+            { text: "투자의 성공 여부는 얼마나 오랫동안 세상의 슬픔을 견뎌낼 수 있느냐에 달렸다.", author: "피터 린치 (Peter Lynch)" },
+            { text: "남들이 탐욕을 부릴 때 두려워하고, 남들이 두려워할 때 탐욕을 부려라.", author: "워런 버핏 (Warren Buffett)" },
+            { text: "시장은 당신이 지급능력을 유지할 수 있는 기간보다 더 오랫동안 비이성적일 수 있다.", author: "존 메이너드 케인스 (John Maynard Keynes)" },
+            { text: "주식 시장은 인내심 없는 사람의 돈을 인내심 있는 사람에게 전달하는 도구다.", author: "워런 버핏 (Warren Buffett)" }
+        ];
+
+        // Chart Instance Container
+        let detailChart = null;
+
+        // Initialize Price History
+        stocks.forEach(st => {
+            for (let i = 0; i < 15; i++) {
+                st.history.push(st.price);
             }
-            
-            // 소수점 첫째 자리까지 표기 (예: 4.5시간)
-            const formattedTime = hours.toFixed(1);
+        });
 
-            // 화면 전환
-            document.getElementById('main-view').style.display = 'none';
-            document.getElementById('loading-view').style.display = 'block';
-            
-            // 데이터 매핑
-            document.getElementById('selected-book').innerText = bookName;
-            document.getElementById('estimated-time').innerText = `${formattedTime}시간`;
-        } else {
-            // 3. 취소를 누른 경우: 아무 동작 안 함 (이전 상태 유지)
-            console.log("재생산이 취소되었습니다.");
+        // -------------------------------------------------------------
+        // ANIMATED BACKGROUND CANVAS FOR START SCREEN
+        // -------------------------------------------------------------
+        function initBgCanvas() {
+            const canvas = document.getElementById('bgChartCanvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            let width = canvas.width = window.innerWidth;
+            let height = canvas.height = window.innerHeight;
+
+            window.addEventListener('resize', () => {
+                width = canvas.width = window.innerWidth;
+                height = canvas.height = window.innerHeight;
+            });
+
+            let points = [];
+            for (let i = 0; i < 30; i++) {
+                points.push(height / 2 + (Math.random() - 0.5) * 200);
+            }
+
+            function drawBg() {
+                ctx.clearRect(0, 0, width, height);
+                ctx.beginPath();
+                ctx.strokeStyle = '#ef4444';
+                ctx.lineWidth = 3;
+
+                const step = width / (points.length - 1);
+                ctx.moveTo(0, points[0]);
+
+                for (let i = 1; i < points.length; i++) {
+                    ctx.lineTo(i * step, points[i]);
+                }
+                ctx.stroke();
+
+                // Shift points gradually
+                for (let i = 0; i < points.length; i++) {
+                    points[i] += (Math.random() - 0.49) * 4;
+                }
+
+                requestAnimationFrame(drawBg);
+            }
+            drawBg();
         }
-    }
 
-    function resetView() {
-        document.getElementById('loading-view').style.display = 'none';
-        document.getElementById('main-view').style.display = 'block';
-    }
-</script>
+        // Generate Floating Arrows in Start Screen
+        function initFloatingArrows() {
+            const container = document.getElementById('floatingArrowsContainer');
+            if (!container) return;
+            const symbols = ['▲', '▼', '📈', '📉', '₩'];
+            for (let i = 0; i < 15; i++) {
+                const el = document.createElement('div');
+                const isRed = Math.random() > 0.4;
+                el.className = `floating-arrow font-bold text-lg md:text-2xl ${isRed ? 'text-red-500' : 'text-blue-500'}`;
+                el.innerText = symbols[Math.floor(Math.random() * symbols.length)];
+                el.style.left = `${Math.random() * 95}%`;
+                el.style.animationDuration = `${4 + Math.random() * 5}s`;
+                el.style.animationDelay = `${Math.random() * 3}s`;
+                container.appendChild(el);
+            }
+        }
 
+        // -------------------------------------------------------------
+        // MODAL HELPERS & CAROUSEL
+        // -------------------------------------------------------------
+        let currentHowToPage = 0;
+        function openModal(id) {
+            document.getElementById(id).classList.remove('hidden');
+            if (id === 'recordsModal') updateRecordsDisplay();
+        }
+        function closeModal(id) {
+            document.getElementById(id).classList.add('hidden');
+        }
+
+        function changeHowToPage(dir) {
+            const pages = document.querySelectorAll('.howToPage');
+            pages[currentHowToPage].classList.add('hidden');
+            currentHowToPage += dir;
+            if (currentHowToPage < 0) currentHowToPage = 0;
+            if (currentHowToPage >= pages.length) currentHowToPage = pages.length - 1;
+            pages[currentHowToPage].classList.remove('hidden');
+
+            document.getElementById('howToIndicator').innerText = `${currentHowToPage + 1} / ${pages.length}`;
+            document.getElementById('howToPrevBtn').style.visibility = currentHowToPage === 0 ? 'hidden' : 'visible';
+            document.getElementById('howToNextBtn').innerText = currentHowToPage === pages.length - 1 ? '닫기' : '다음';
+            if (currentHowToPage === pages.length - 1 && dir === 1) {
+                closeModal('howToModal');
+                currentHowToPage = 0;
+            }
+        }
+
+        // -------------------------------------------------------------
+        // GAME TRANSITION & COUNTDOWN
+        // -------------------------------------------------------------
+        function startGameSequence() {
+            const overlay = document.getElementById('transitionOverlay');
+            overlay.classList.remove('curtain-open');
+            overlay.classList.add('curtain-closed');
+
+            setTimeout(() => {
+                document.getElementById('startScreen').classList.add('hidden');
+                document.getElementById('countdownScreen').classList.remove('hidden');
+                
+                // Set Random Quote
+                const q = quotes[Math.floor(Math.random() * quotes.length)];
+                document.getElementById('quoteText').innerText = `"${q.text}"`;
+                document.getElementById('quoteAuthor').innerText = `- ${q.author}`;
+
+                overlay.classList.remove('curtain-closed');
+                overlay.classList.add('curtain-open');
+
+                // Start 3s countdown
+                let count = 3;
+                const numEl = document.getElementById('countdownNumber');
+                numEl.innerText = count;
+
+                const cdInterval = setInterval(() => {
+                    count--;
+                    if (count > 0) {
+                        numEl.innerText = count;
+                        sfx.click();
+                    } else if (count === 0) {
+                        numEl.innerText = "START!";
+                        sfx.news();
+                    } else {
+                        clearInterval(cdInterval);
+                        document.getElementById('countdownScreen').classList.add('hidden');
+                        document.getElementById('gameScreen').classList.remove('hidden');
+                        initGame();
+                    }
+                }, 1000);
+            }, 600);
+        }
+
+        // -------------------------------------------------------------
+        // MAIN GAME ENGINE & RENDER
+        // -------------------------------------------------------------
+        function initGame() {
+            playerCash = INITIAL_CASH;
+            stocks.forEach(s => {
+                s.pos = { qty: 0, type: null, avgPrice: 0, leverage: 1 };
+            });
+
+            renderStockList();
+            initChart();
+            updateUI();
+
+            // Clear old timers
+            if (gameTimer) clearInterval(gameTimer);
+            if (newsTimer) clearInterval(newsTimer);
+
+            // Price Update Loop (Every 5 Seconds)
+            gameTimer = setInterval(() => {
+                updateMarketPrices();
+            }, 5000);
+
+            // News Loop (Every 20 Seconds)
+            newsTimer = setInterval(() => {
+                triggerRandomNews();
+            }, 20000);
+        }
+
+        function updateMarketPrices() {
+            stocks.forEach(st => {
+                // Random fluctuation based on volatility
+                const changePercent = (Math.random() - 0.49) * st.volatility * 2;
+                st.price = Math.max(100, Math.round(st.price * (1 + changePercent)));
+                st.history.push(st.price);
+                if (st.history.length > 20) st.history.shift();
+            });
+
+            updateUI();
+            checkBankruptCondition();
+        }
+
+        function triggerRandomNews() {
+            const newsItem = newsDatabase[Math.floor(Math.random() * newsDatabase.length)];
+            const targetStock = stocks.find(s => s.id === newsItem.stockId);
+            
+            if (targetStock) {
+                // Impact price
+                targetStock.price = Math.max(100, Math.round(targetStock.price * (1 + newsItem.impact)));
+                targetStock.history.push(targetStock.price);
+                if (targetStock.history.length > 20) targetStock.history.shift();
+
+                // UI Banner Update
+                const banner = document.getElementById('newsText');
+                banner.innerText = newsItem.text;
+                sfx.news();
+
+                updateUI();
+                checkBankruptCondition();
+            }
+        }
+
+        // Calculate total portfolio net assets
+        function calculateNetAssets() {
+            let totalPosValue = 0;
+            stocks.forEach(st => {
+                if (st.pos.qty > 0) {
+                    const priceDiff = st.price - st.pos.avgPrice;
+                    if (st.pos.type === 'BUY') {
+                        const profit = priceDiff * st.pos.qty * st.pos.leverage;
+                        totalPosValue += (st.pos.avgPrice * st.pos.qty) + profit;
+                    } else if (st.pos.type === 'SHORT') {
+                        const profit = -priceDiff * st.pos.qty * st.pos.leverage;
+                        totalPosValue += (st.pos.avgPrice * st.pos.qty) + profit;
+                    }
+                }
+            });
+            return playerCash + totalPosValue;
+        }
+
+        function checkBankruptCondition() {
+            const netWorth = calculateNetAssets();
+            if (netWorth <= BANKRUPT_THRESHOLD) {
+                clearInterval(gameTimer);
+                clearInterval(newsTimer);
+                sfx.gameOver();
+                
+                document.getElementById('goFinalAssets').innerText = `${netWorth.toLocaleString()} 원`;
+                openModal('gameOverModal');
+                saveRecord(netWorth);
+            }
+        }
+
+        // -------------------------------------------------------------
+        // TRADING ACTIONS
+        // -------------------------------------------------------------
+        function setLeverage(lev) {
+            sfx.click();
+            selectedLeverage = lev;
+            document.getElementById('lev1xBtn').className = lev === 1 
+                ? "py-1.5 text-xs font-bold rounded-lg bg-red-600 text-white transition"
+                : "py-1.5 text-xs font-bold rounded-lg text-gray-400 hover:text-white transition";
+            document.getElementById('lev2xBtn').className = lev === 2
+                ? "py-1.5 text-xs font-bold rounded-lg bg-red-600 text-white transition"
+                : "py-1.5 text-xs font-bold rounded-lg text-gray-400 hover:text-white transition";
+        }
+
+        function setTradeRatio(ratio) {
+            sfx.click();
+            tradeRatio = ratio;
+        }
+
+        function executeTrade(action) {
+            const st = stocks.find(s => s.id === selectedStockId);
+            if (!st) return;
+
+            if (action === 'BUY' || action === 'SHORT') {
+                if (st.pos.qty > 0) {
+                    alert("이미 해당 종목에 포지션이 있습니다! 먼저 기존 포지션을 청산해주세요.");
+                    return;
+                }
+
+                const investAmount = playerCash * tradeRatio;
+                if (investAmount < st.price) {
+                    alert("보유 현금이 부족하여 최소 1주도 구매할 수 없습니다.");
+                    return;
+                }
+
+                const qty = Math.floor(investAmount / st.price);
+                const totalCost = qty * st.price;
+
+                playerCash -= totalCost;
+                st.pos = {
+                    qty: qty,
+                    type: action,
+                    avgPrice: st.price,
+                    leverage: selectedLeverage
+                };
+
+                sfx.buy();
+            } else if (action === 'CLOSE') {
+                if (st.pos.qty === 0) {
+                    alert("청산할 포지션이 없습니다.");
+                    return;
+                }
+
+                const priceDiff = st.price - st.pos.avgPrice;
+                let returnCash = st.pos.avgPrice * st.pos.qty;
+
+                if (st.pos.type === 'BUY') {
+                    returnCash += priceDiff * st.pos.qty * st.pos.leverage;
+                } else if (st.pos.type === 'SHORT') {
+                    returnCash += (-priceDiff) * st.pos.qty * st.pos.leverage;
+                }
+
+                playerCash += returnCash;
+                st.pos = { qty: 0, type: null, avgPrice: 0, leverage: 1 };
+                sfx.sell();
+            }
+
+            updateUI();
+            checkBankruptCondition();
+        }
+
+        // -------------------------------------------------------------
+        // GRADUATION & RECORD KEEPING
+        // -------------------------------------------------------------
+        function triggerGraduation() {
+            clearInterval(gameTimer);
+            clearInterval(newsTimer);
+
+            const netWorth = calculateNetAssets();
+            saveRecord(netWorth);
+
+            const valEl = document.getElementById('gradFinalAssetValue');
+            valEl.innerText = `${netWorth > 0 ? '+' : ''}${netWorth.toLocaleString()} 원`;
+            valEl.className = `text-3xl md:text-4xl font-black ${netWorth >= 0 ? 'text-red-500' : 'text-blue-500'}`;
+
+            const msgEl = document.getElementById('gradMessage');
+            if (netWorth >= GRADUATION_GOAL) {
+                msgEl.innerText = "🎉 축하합니다! 1억원의 벽을 깨고 가뿐히 졸업하셨습니다!";
+                sfx.fanfare();
+                // Fire dynamic confetti
+                if (window.confetti) {
+                    confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
+                }
+            } else if (netWorth > 0) {
+                msgEl.innerText = "수익을 내며 무사히 졸업하셨습니다! 나름 훌륭한 성과입니다.";
+                sfx.fanfare();
+            } else {
+                msgEl.innerText = "손실을 끌어안고 씁쓸하게 마감하셨습니다... 다음 기회를 노려보세요!";
+                sfx.gameOver();
+            }
+
+            openModal('graduationModal');
+        }
+
+        function saveRecord(score) {
+            let highest = parseInt(localStorage.getItem('godOfTrading_highest') || '0');
+            let lowest = parseInt(localStorage.getItem('godOfTrading_lowest') || '0');
+
+            if (score > highest) localStorage.setItem('godOfTrading_highest', score);
+            if (score < lowest) localStorage.setItem('godOfTrading_lowest', score);
+        }
+
+        function updateRecordsDisplay() {
+            let highest = parseInt(localStorage.getItem('godOfTrading_highest') || '0');
+            let lowest = parseInt(localStorage.getItem('godOfTrading_lowest') || '0');
+
+            document.getElementById('recordHighest').innerText = `${highest > 0 ? '+' : ''}${highest.toLocaleString()} 원`;
+            document.getElementById('recordLowest').innerText = `${lowest.toLocaleString()} 원`;
+        }
+
+        function returnToStartScreen() {
+            closeModal('graduationModal');
+            document.getElementById('gameScreen').classList.add('hidden');
+            document.getElementById('startScreen').classList.remove('hidden');
+        }
+
+        function restartGame() {
+            closeModal('gameOverModal');
+            initGame();
+        }
+
+        // -------------------------------------------------------------
+        // UI & CHART RENDER LOGIC
+        // -------------------------------------------------------------
+        function selectStock(id) {
+            sfx.click();
+            selectedStockId = id;
+            renderStockList();
+            updateUI();
+        }
+
+        function renderStockList() {
+            const container = document.getElementById('stockListContainer');
+            container.innerHTML = '';
+
+            stocks.forEach(st => {
+                const prevPrice = st.history[st.history.length - 2] || st.price;
+                const diff = st.price - prevPrice;
+                const diffRatio = (diff / prevPrice) * 100;
+                const isSelected = st.id === selectedStockId;
+
+                const card = document.createElement('div');
+                card.onclick = () => selectStock(st.id);
+                card.className = `p-3.5 rounded-2xl cursor-pointer border transition-all duration-200 flex items-center justify-between ${
+                    isSelected 
+                        ? 'bg-gray-850 border-red-500/80 shadow-md ring-1 ring-red-500/50' 
+                        : 'bg-gray-900/90 border-gray-800 hover:border-gray-700'
+                }`;
+
+                card.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-gray-800 flex items-center justify-center font-bold text-sm text-gray-300">
+                            ${st.name.substring(0, 2)}
+                        </div>
+                        <div>
+                            <div class="font-bold text-sm text-white flex items-center gap-1.5">
+                                ${st.name}
+                                ${st.pos.qty > 0 ? '<span class="text-[10px] px-1.5 py-0.2 bg-red-950 text-red-400 border border-red-800 rounded">보유</span>' : ''}
+                            </div>
+                            <span class="text-[11px] text-gray-500">변동성: ${st.volText}</span>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <div class="font-bold text-sm text-white">${st.price.toLocaleString()} 원</div>
+                        <div class="text-xs font-semibold ${diff >= 0 ? 'text-red-400' : 'text-blue-400'}">
+                            ${diff >= 0 ? '+' : ''}${diff.toLocaleString()} (${diffRatio >= 0 ? '+' : ''}${diffRatio.toFixed(2)}%)
+                        </div>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function updateUI() {
+            const netAssets = calculateNetAssets();
+            const profitVal = netAssets - INITIAL_CASH;
+            const profitRatio = (profitVal / INITIAL_CASH) * 100;
+
+            document.getElementById('statNetAssets').innerText = `${netAssets.toLocaleString()} 원`;
+            document.getElementById('statCash').innerText = `${playerCash.toLocaleString()} 원`;
+
+            const profitEl = document.getElementById('statProfit');
+            profitEl.innerText = `${profitVal >= 0 ? '+' : ''}${profitVal.toLocaleString()} 원 (${profitRatio >= 0 ? '+' : ''}${profitRatio.toFixed(2)}%)`;
+            profitEl.className = `text-base md:text-lg font-bold ${profitVal >= 0 ? 'text-red-400' : 'text-blue-400'}`;
+
+            // Active Stock Details
+            const activeSt = stocks.find(s => s.id === selectedStockId);
+            if (activeSt) {
+                document.getElementById('activeStockName').innerText = activeSt.name;
+                document.getElementById('activeStockVolatility').innerText = `변동성: ${activeSt.volText}`;
+                document.getElementById('activeStockDesc').innerText = activeSt.desc;
+                document.getElementById('activeStockPrice').innerText = `${activeSt.price.toLocaleString()} 원`;
+
+                const prevPrice = activeSt.history[activeSt.history.length - 2] || activeSt.price;
+                const diff = activeSt.price - prevPrice;
+                const diffRatio = (diff / prevPrice) * 100;
+
+                const changeEl = document.getElementById('activeStockChange');
+                changeEl.innerText = `${diff >= 0 ? '+' : ''}${diff.toLocaleString()} 원 (${diffRatio >= 0 ? '+' : ''}${diffRatio.toFixed(2)}%)`;
+                changeEl.className = `text-xs md:text-sm font-semibold ${diff >= 0 ? 'text-red-400' : 'text-blue-400'}`;
+
+                // Position Banner
+                const posBannerQty = document.getElementById('posTypeQty');
+                const posAvgLev = document.getElementById('posAvgLeverage');
+                const posPnL = document.getElementById('posPnL');
+
+                if (activeSt.pos.qty > 0) {
+                    const priceDiff = activeSt.price - activeSt.pos.avgPrice;
+                    let pnl = 0;
+                    if (activeSt.pos.type === 'BUY') {
+                        pnl = priceDiff * activeSt.pos.qty * activeSt.pos.leverage;
+                    } else if (activeSt.pos.type === 'SHORT') {
+                        pnl = (-priceDiff) * activeSt.pos.qty * activeSt.pos.leverage;
+                    }
+                    const pnlRatio = (pnl / (activeSt.pos.avgPrice * activeSt.pos.qty)) * 100;
+
+                    posBannerQty.innerText = `${activeSt.pos.type === 'BUY' ? '매수(Long)' : '공매도(Short)'} ${activeSt.pos.qty}주`;
+                    posAvgLev.innerText = `${activeSt.pos.avgPrice.toLocaleString()} 원 / ${activeSt.pos.leverage}x`;
+                    posPnL.innerText = `${pnl >= 0 ? '+' : ''}${pnl.toLocaleString()} 원 (${pnlRatio >= 0 ? '+' : ''}${pnlRatio.toFixed(2)}%)`;
+                    posPnL.className = `font-bold ${pnl >= 0 ? 'text-red-400' : 'text-blue-400'}`;
+                } else {
+                    posBannerQty.innerText = '포지션 없음';
+                    posAvgLev.innerText = '-';
+                    posPnL.innerText = '0 원 (0.00%)';
+                    posPnL.className = 'font-bold text-gray-400';
+                }
+
+                updateChart(activeSt);
+            }
+
+            renderStockList();
+        }
+
+        // -------------------------------------------------------------
+        // CHART.JS ENGINE
+        // -------------------------------------------------------------
+        function initChart() {
+            const ctx = document.getElementById('stockDetailChart').getContext('2d');
+            detailChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: Array.from({ length: 20 }, (_, i) => `${i + 1}T`),
+                    datasets: [{
+                        label: '주가 (KRW)',
+                        data: [],
+                        borderColor: '#ef4444',
+                        borderWidth: 2.5,
+                        fill: true,
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        tension: 0.3,
+                        pointRadius: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { display: false },
+                        y: {
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: { color: '#9ca3af', font: { size: 10 } }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateChart(stock) {
+            if (!detailChart) return;
+            const isUp = stock.price >= (stock.history[0] || stock.price);
+            const strokeColor = isUp ? '#ef4444' : '#3b82f6';
+            const fillColor = isUp ? 'rgba(239, 68, 68, 0.1)' : 'rgba(59, 130, 246, 0.1)';
+
+            detailChart.data.datasets[0].data = stock.history;
+            detailChart.data.datasets[0].borderColor = strokeColor;
+            detailChart.data.datasets[0].backgroundColor = fillColor;
+            detailChart.update('none');
+        }
+
+        // Window Load Setup
+        window.onload = function() {
+            initBgCanvas();
+            initFloatingArrows();
+        };
+    </script>
 </body>
 </html>
